@@ -13,7 +13,8 @@ export default class RTCClient {
 			appId: "",
 			channel: "",
 			uid: "",
-			token: ""
+			token: "",
+			screenShareID: ""
 		};
 		this.videoStreamConfig = {
 			audio: true,
@@ -21,11 +22,14 @@ export default class RTCClient {
 			screen: false
 		};
 		this.screenShareStreamConfig = {
-			audio: true,
-			video: true,
-			screen: false
+			audio: false, // Set the audio attribute as false to avoid any echo during the call.
+			video: false,
+			screen: true, // screen stream
+			// extensionId: "minllpmhdgpndnkomcoccfekfegnlikg", // Google Chrome:
+			mediaSource: "screen" // Firefox: 'screen', 'application', 'window' (select one)
 		};
 		this.client = null;
+		this.screenShareClient = null;
 		this.localStream = {
 			camera: {
 				id: "",
@@ -95,6 +99,7 @@ export default class RTCClient {
 					resolve(localStream);
 					this.localStream.camera.stream = localStream;
 					this.localStream.camera.id = localStream.getId();
+					this.streamListener();
 					// Publish the local stream
 					this.client.publish(localStream, err => {
 						console.log("publish failed");
@@ -104,6 +109,68 @@ export default class RTCClient {
 				err => {
 					reject(err);
 					console.error("init local stream failed ", err);
+				}
+			);
+		});
+	}
+
+	joinChannelAsScreenShare(option) {
+		return new Promise((resolve, reject) => {
+			this.screenShareClient = AgoraRTC.createClient(this.screenShareConfig);
+			this.screenShareClient.init(
+				option.appid,
+				() => {
+					console.log("init screen share success");
+					this.screenShareClient.join(
+						option.token ? option.token : null,
+						option.channel,
+						null,
+						uid => {
+							console.log(
+								"join channel: " + this.option.channel + " success for screen share, uid: ",
+								uid
+							);
+							this.option.screenShareID = uid;
+							resolve();
+						},
+						err => {
+							console.error("client join failed for screen share", err);
+						}
+					);
+				},
+				err => {
+					reject(err);
+					console.error(err);
+				}
+			);
+			console.log("[agora-vue] appId", option.appid);
+		});
+	}
+
+	publishScreenShareStream() {
+		return new Promise((resolve, reject) => {
+			// Create a local stream
+			var localStream = AgoraRTC.createStream({
+				streamID: this.option.screenShareID,
+				...this.screenShareStreamConfig
+			});
+			localStream.setVideoProfile(this.screenVideoProfile);
+			// Initialize the local stream
+			localStream.init(
+				() => {
+					console.log("init local stream success for screens share");
+					resolve(localStream);
+					this.localStream.screen.stream = localStream;
+					this.localStream.screen.id = localStream.getId();
+					// Publish the local stream
+					this.screenShareClient.publish(localStream, err => {
+						console.log("publish failed");
+						console.error(err);
+					});
+				},
+				err => {
+					reject(err);
+					console.error("init local stream failed for screen share ", err);
 				}
 			);
 		});
@@ -127,6 +194,15 @@ export default class RTCClient {
 		});
 		client.on("peer-leave", evt => {
 			this._eventBus.emit("peer-leave", evt);
+		});
+	}
+
+	streamListener() {
+		const stream = this.localStream.camera.stream;
+
+		stream.on("audioTrackEnded", evt => {
+			// This possibly occurs when a media device is unplugged.
+			this._eventBus.emit("audioTrackEnded", evt);
 		});
 	}
 

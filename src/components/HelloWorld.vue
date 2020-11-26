@@ -1,8 +1,10 @@
 <template>
 	<div class="videoWrapper">
+		{{ domId }}
 		<div v-if="primaryStreamId == domId" class="videoButtonWrapper">
 			<button @click="muteAudio">{{ audio ? "Mute" : "UnMute" }}</button>
 			<button @click="muteVideo">{{ video ? "Mute Video" : "UnMute Video" }}</button>
+			<button @click="shareScreen">{{ screen ? "Start Screen Share" : "Stop Screen Share" }}</button>
 			<button @click="exitMeeting">Exit Meeting</button>
 		</div>
 		<div class="videoItemWrapper" ref="player" :id="domId"></div>
@@ -15,7 +17,8 @@
 		data() {
 			return {
 				audio: true,
-				video: true
+				video: true,
+				screen: true
 			};
 		},
 		mounted() {
@@ -39,6 +42,10 @@
 			muteVideo() {
 				this.video = !this.video;
 				this.$emit("setVideoStatus", this.video);
+			},
+			shareScreen() {
+				this.screen = !this.screen;
+				this.$emit("screenShare", this.screen);
 			},
 			exitMeeting() {
 				this.$emit("jaraHuMai");

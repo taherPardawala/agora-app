@@ -9,6 +9,7 @@
 			<HelloWorld
 				@setVideoStatus="updateVideoStatus"
 				@setAudioStatus="updateAudioStatus"
+				@screenShare="screenShare"
 				@jaraHuMai="leaveMeeting"
 				:primaryStreamId="primaryStream.id"
 				:stream="primaryStream.stream"
@@ -55,15 +56,15 @@
 				rtc.on("stream-added", evt => {
 					let { stream } = evt;
 					console.log("[agora] [stream-added] stream-added", stream.getId());
-					rtc.client.subscribe(stream);
+					if (this.primaryStream.id != stream.getId()) rtc.client.subscribe(stream);
 				});
 
 				rtc.on("stream-subscribed", evt => {
 					let { stream } = evt;
 					console.log("[agora] [stream-subscribed] stream-added", stream.getId());
-					if (!this.secondaryStream.find(it => it.id === stream.getId())) {
-						this.secondaryStream.push({ stream, id: stream.getId() });
-					}
+					// if (!this.secondaryStream.find(it => it.id === stream.getId())) {
+					// 	this.secondaryStream.push({ stream, id: stream.getId() });
+					// }
 				});
 
 				rtc.on("stream-removed", evt => {
@@ -97,6 +98,10 @@
 				rtc.on("unmute-video", function(evt) {
 					console.log("Remote stream: " + evt.uid + "has un-muted video");
 				});
+
+				rtc.on("audioTrackEnded", function(evt) {
+					console.log("AudioTrackEnded" + evt);
+				});
 			} else {
 				console.log("Browser badal Garib.");
 			}
@@ -105,10 +110,6 @@
 			return {
 				jointMeeting: false,
 				primaryStream: {
-					id: "",
-					stream: ""
-				},
-				localStream: {
 					id: "",
 					stream: ""
 				},
@@ -131,8 +132,8 @@
 							.publishStream()
 							.then(stream => {
 								console.log("PUBLISH STREAM HO GAYA SUCCESS", stream);
-								this.primaryStream.stream = this.localStream.stream = stream;
-								this.primaryStream.id = this.localStream.id = stream.getId();
+								this.primaryStream.stream = stream;
+								this.primaryStream.id = stream.getId();
 								this.jointMeeting = true;
 							})
 							.catch(err => {
@@ -157,6 +158,57 @@
 					this.rtc.localStream.camera.stream.unmuteAudio();
 				}
 			},
+			screenShare(status) {
+				if (!status) {
+					// start screen share
+					this.rtc
+						.joinChannelAsScreenShare({
+							appid: this.appid,
+							channel: this.channel
+						})
+						.then(() => {
+							console.log("Screen share JOIN HO GAYA SUCCESS");
+							this.rtc
+								.publishScreenShareStream()
+								.then(stream => {
+									console.log("PUBLISH STREAM HO GAYA SUCCESS", stream);
+									this.secondaryStream.unshift({
+										stream: this.rtc.localStream.stream,
+										id: this.primaryStream.id
+									});
+									this.primaryStream.stream = stream;
+									this.primaryStream.id = stream.getId();
+								})
+								.catch(err => {
+									console.log("publish local error", err);
+								});
+						})
+						.catch(err => {
+							console.log("join channel error", err);
+						});
+				} else {
+					// stop screen share
+					// localStreams.screen.stream.disableVideo(); // disable the local video stream (will send a mute signal)
+					// localStreams.screen.stream.stop(); // stop playing the local stream
+					// localStreams.camera.stream.enableVideo(); // enable the camera feed
+					// localStreams.camera.stream.play("local-video"); // play the camera within the full-screen-video div
+					// $("#video-btn").prop("disabled", false);
+					// screenClient.leave(
+					// 	function() {
+					// 		screenShareActive = false;
+					// 		console.log("screen client leaves channel");
+					// 		$("#screen-share-btn").prop("disabled", false); // enable button
+					// 		screenClient.unpublish(localStreams.screen.stream); // unpublish the screen client
+					// 		localStreams.screen.stream.close(); // close the screen client stream
+					// 		localStreams.screen.id = ""; // reset the screen id
+					// 		localStreams.screen.stream = {}; // reset the stream obj
+					// 	},
+					// 	function(err) {
+					// 		console.log("client leave failed ", err); //error handling
+					// 	}
+					// );
+				}
+			},
 			leaveMeeting() {
 				this.jointMeeting = false;
 				this.rtc
@@ -167,7 +219,7 @@
 					.catch(err => {
 						console.log("Leave Failure");
 					});
-				this.primaryStream = this.localStream = {
+				this.primaryStream = {
 					id: "",
 					stream: ""
 				};
